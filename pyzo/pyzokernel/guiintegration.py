@@ -34,8 +34,17 @@ does not block. In most cases your app should run fine without the need
 for modifications. For clarity, this is what the pyzo kernel does:
 - Prevent deletion of objects in the local scope of functions leading to exec_()
 - Prevent system exit right after the exec_() call
-""".strip()+"\n"
+""".lstrip()
 
+
+# Print the main loop warning at most once
+_printed_warning = False
+def print_mainloop_warning(msg=None):
+    global _printed_warning
+    if not _printed_warning:
+        _printed_warning = True
+        msg = msg or mainloopWarning
+        printDirect(msg)
 
 
 class App_base:
@@ -115,7 +124,7 @@ class App_tk(App_base):
         # tkinter.Tk() has a mainloop method, which will simply call
         # tkinter.mainloop().
         def dummy_mainloop(*args,**kwargs):
-            printDirect(mainloopWarning)
+            print_mainloop_warning()
         tkinter.Misc.mainloop = dummy_mainloop
         tkinter.mainloop = dummy_mainloop
                 
@@ -153,7 +162,7 @@ class App_fltk(App_base):
         
         # Replace mainloop with a dummy
         def dummyrun(*args,**kwargs):
-            printDirect(mainloopWarning)
+            print_mainloop_warning()
         fl.Fl.run = types.MethodType(dummyrun, fl.Fl)
         
         # Store the app instance to process events
@@ -177,7 +186,7 @@ class App_fltk2(App_base):
         
         # Replace mainloop with a dummy
         def dummyrun(*args,**kwargs):
-            printDirect(mainloopWarning)    
+            print_mainloop_warning()
         fl.run = dummyrun    
         
         # Return the app instance to process events
@@ -209,7 +218,7 @@ class App_tornado(App_base):
         
         # Replace mainloop with a dummy
         def dummy_start():
-            printDirect(mainloopWarning)
+            print_mainloop_warning()
             sys._pyzoInterpreter.ignore_sys_exit = True
             self.app.add_callback(reset_sys_exit)
         def dummy_stop():
@@ -252,6 +261,14 @@ class App_tornado(App_base):
         self._timer.start()
         # Enter mainloop
         self.app._original_start()
+        while True:
+            try:
+                self.app._original_start()
+            except KeyboardInterrupt:
+                self._keyboard_interrupt()
+                self.app._original_stop()
+                continue
+            break
     
     def quit(self):
         self.app._original_stop()
@@ -336,7 +353,7 @@ class App_qt(App_base):
                 quite hard if an object goes out of scope, and the error
                 is not obvious.
                 """
-                printDirect(mainloopWarning_qt+'\n')
+                print_mainloop_warning(mainloopWarning_qt)
                 
                 # Store local namespaces (scopes) of any functions that
                 # precede this call. It might have a widget or application
@@ -434,6 +451,15 @@ class App_pyqt4(App_qt):
         from PyQt4 import QtGui, QtCore
         return QtGui, QtCore
     
+class App_pyside2(App_qt):
+    """ Hijack the PySide2 mainloop.
+    """
+    
+    def importCoreAndGui(self):
+        # Try importing qt        
+        import PySide2
+        from PySide2 import QtGui, QtCore, QtWidgets
+        return QtWidgets, QtCore  # QApp sits on QtWidgets
     
 class App_pyside(App_qt):
     """ Hijack the PySide mainloop.
@@ -462,7 +488,7 @@ class App_wx(App_base):
         
         # Create dummy mainloop to replace original mainloop
         def dummy_mainloop(*args, **kw):
-            printDirect(mainloopWarning)
+            print_mainloop_warning()
         
         # Depending on version, replace mainloop
         ver = wx.__version__
@@ -520,7 +546,7 @@ class App_gtk(App_base):
         
         # Replace mainloop with a dummy
         def dummy_mainloop(*args, **kwargs):
-            printDirect(mainloopWarning)        
+            print_mainloop_warning()
         gtk.mainloop = dummy_mainloop
         gtk.main = dummy_mainloop
         

@@ -17,7 +17,7 @@ import unicodedata
 import datetime
 import webbrowser
 
-from pyzo.util.qt import QtCore, QtGui, QtWidgets
+from pyzo.util.qt import QtCore, QtGui, QtWidgets, QtPrintSupport
 
 import pyzo
 from pyzo.core.compactTabWidget import CompactTabWidget
@@ -31,7 +31,7 @@ def buildMenus(menuBar):
     """
     Build all the menus
     """
-    menus = [ FileMenu(menuBar, translate("menu", "File")),
+    menus = [   FileMenu(menuBar, translate("menu", "File")),
                 EditMenu(menuBar, translate("menu", "Edit")),
                 ViewMenu(menuBar, translate("menu", "View")),
                 SettingsMenu(menuBar, translate("menu", "Settings")),
@@ -136,6 +136,7 @@ class KeyMapper(QtCore.QObject):
             # Set shortcut so Qt can do its magic
             shortcuts = pyzo.config.shortcuts2[action.menuPath]
             action.setShortcuts(shortcuts.split(','))
+            pyzo.main.addAction(action)  # issue #470, http://stackoverflow.com/questions/23916623
             # Also store shortcut text (used in display of tooltip
             shortcuts = shortcuts.replace(',',', ').replace('  ', ' ')
             action._shortcutsText = shortcuts.rstrip(', ')
@@ -580,7 +581,7 @@ class FileMenu(Menu):
     def _print(self):
         editor = pyzo.editors.getCurrentEditor()
         if editor is not None:
-            printer = QtWidgets.QPrinter(QtWidgets.QPrinter.HighResolution)
+            printer = QtPrintSupport.QPrinter(QtPrintSupport.QPrinter.HighResolution)
             if True:
                 filename = QtWidgets.QFileDialog.getSaveFileName(None, 
                         'Export PDF', os.path.expanduser("~"), "*.pdf *.ps")
@@ -1348,23 +1349,21 @@ class RunMenu(Menu):
         # Return
         return shell, editor
     
-    def _advance(self):
+    def _advance(self, runCursor):
         # Get editor and shell
         shell, editor = self._getShellAndEditor('selection')
         if not shell or not editor:
             return
         
         cursor = editor.textCursor()
-        runCursor = editor.textCursor()
         cursor.setPosition(runCursor.position())
         cursor.movePosition(cursor.NextBlock)
         editor.setTextCursor(cursor)
     
     def _runSelectedAdvance(self):
-        self._runSelected()
-        self._advance()
+        self._runSelected(advance=True)
 
-    def _runSelected(self):
+    def _runSelected(self, advance=False):
         """ Run the selected whole lines in the current shell. 
         """
         # Get editor and shell
@@ -1402,12 +1401,14 @@ class RunMenu(Menu):
             # Get filename and run code
             fname = editor.id() # editor._name or editor._filename
             shell.executeCode(code, fname, lineNumber1)
+        
+        if advance:
+            self._advance(runCursor)
     
     def _runCellAdvance(self):
-        self._runCell()
-        self._advance()
+        self._runCell(advance=True)
     
-    def _runCell(self):
+    def _runCell(self, advance=False):
         """ Run the code between two cell separaters ('##'). 
         """
         #TODO: ignore ## in multi-line strings
@@ -1466,6 +1467,9 @@ class RunMenu(Menu):
         # Get filename and run code
         fname = editor.id() # editor._name or editor._filename
         shell.executeCode(code, fname, lineNumber, cellName)
+        
+        if advance:
+            self._advance(runCursor)
     
     
     def _showWhatToExecute(self, editor, runCursor=None):

@@ -461,6 +461,7 @@ class PyzoInterpreter:
             elif guiName == 'AUTO':
                 for tryName, tryApp in [('PYQT5', guiintegration.App_pyqt5),
                                         ('PYQT4', guiintegration.App_pyqt4),
+                                        ('PYSIDE2', guiintegration.App_pyside2),
                                         ('PYSIDE', guiintegration.App_pyside),
                                         #('WX', guiintegration.App_wx),
                                         ('TK', guiintegration.App_tk),
@@ -481,6 +482,8 @@ class PyzoInterpreter:
                 self.guiApp = guiintegration.App_tornado()
             elif guiName == 'PYSIDE':
                 self.guiApp = guiintegration.App_pyside()
+            elif guiName == 'PYSIDE2':
+                self.guiApp = guiintegration.App_pyside2()
             elif guiName in ['PYQT5', 'QT5']:
                 self.guiApp = guiintegration.App_pyqt5()
             elif guiName in ['PYQT4', 'QT4']:
@@ -830,9 +833,14 @@ class PyzoInterpreter:
         
         # Get text (make sure it ends with a newline)
         try:
-            source = open(fname, 'rb').read().decode('UTF-8')
+            bb = open(fname, 'rb').read()
+            encoding = 'UTF-8'
+            firstline = bb.split('\n'.encode(), 1)[0].decode('ascii', 'ignore')
+            if firstline.startswith('#') and 'coding' in firstline:
+                encoding = firstline.split('coding', 1)[-1].strip(' \t\r\n:=-*')
+            source = bb.decode(encoding)
         except Exception:
-            printDirect('Could not read script (decoding using UTF-8): "' + fname + '"\n')
+            printDirect('Could not read script (decoding using %s): %r\n' % (encoding, fname))
             return
         try:
             source = source.replace('\r\n', '\n').replace('\r','\n')
